@@ -1,138 +1,179 @@
 # RocketDrop
 
-RocketDrop is a full-stack, real-time e-commerce platform for limited drops, built with React and Spring Boot.
+A launch-driven e-commerce platform built for limited drops, real-time queues, and fast admin operations.
 
-It combines:
-- Product discovery with search/filter
-- Drop scheduling and countdown-driven UX
-- JWT-secured customer and admin flows
-- Cart, wishlist, checkout, and order lifecycle
-- Real-time queue/viewer updates over WebSocket
+[![Frontend](https://img.shields.io/badge/Frontend-React%2018-61dafb?logo=react&logoColor=white)](#tech-stack-studio)
+[![Backend](https://img.shields.io/badge/Backend-Spring%20Boot%204-6db33f?logo=springboot&logoColor=white)](#tech-stack-studio)
+[![Database](https://img.shields.io/badge/Database-MySQL-4479a1?logo=mysql&logoColor=white)](#tech-stack-studio)
+[![Realtime](https://img.shields.io/badge/Realtime-STOMP%20WebSocket-7b68ee)](#drop-engine)
 
-## Table of Contents
-- Project Vision
-- Core Features
-- Tech Stack
+## Navigation
+- Experience Snapshot
+- Tech Stack Studio
 - System Architecture
-- Data Flow Diagrams (DFD)
-- Repository Structure
+- Drop Engine
+- DFD (Level 0 and Level 1)
+- Page Experience Map
+- Project Structure
 - Quick Start
-- Configuration
-- Security Model
-- Deployment Guidance
-- Documentation Index
+- Configuration and Security
+- Deployment Blueprint
+- Documentation Hub
 
-## Project Vision
-RocketDrop is designed for launch-style commerce where timing, stock, and experience quality are critical. The system supports both customer buying journeys and admin operations with a unified API and consistent data model.
+## Experience Snapshot
+RocketDrop is designed for high-intent product launches where timing and stock matter.
 
-## Core Features
+### What it delivers
+- Searchable product catalog with server-side filters and sorting
+- Time-sensitive drop lifecycle with countdowns
+- Queue participation and viewer activity in real time
+- Customer flow: auth, cart, addresses, checkout, order tracking
+- Admin flow: product/category management, image upload, order status control
 
-### Customer Features
-- Register and login with JWT
-- Browse products and categories
-- Search and filter products with paginated server-side queries
-- View similar products and drop states (LIVE, UPCOMING, SOLD_OUT)
-- Manage cart and wishlist
-- Save addresses and place orders
-- Track order history and order details
-- Join and leave drop queues
+### Product statuses
+- LIVE
+- UPCOMING
+- SOLD_OUT
 
-### Admin Features
-- CRUD operations for products and categories
-- Product image upload via Cloudinary with local fallback
-- Drop scheduling via product dropTime updates
-- Order status transitions (PLACED, SHIPPED, DELIVERED, CANCELLED)
+## Tech Stack Studio
 
-### Real-Time Features
-- STOMP over WebSocket/SockJS endpoint at /ws
-- Live viewer count per product
-- Live queue updates for joins/leaves
-- Stock update broadcasting channels
+| Layer | Stack | Why it fits RocketDrop |
+|---|---|---|
+| UI | React, Vite, Tailwind CSS | Fast interactions, modern responsive interfaces |
+| State | Redux Toolkit, Context APIs | Predictable app state and scalable feature growth |
+| API | Spring Boot, Spring MVC | Strong domain modeling and mature ecosystem |
+| Security | Spring Security, JWT | Stateless auth and role-based control |
+| Data | MySQL, Spring Data JPA | Relational consistency for orders and inventory |
+| Realtime | STOMP, SockJS, WebSocket | Live queue and viewer updates |
+| Media | Cloudinary + local fallback | Reliable image handling across environments |
 
-## Tech Stack
+<details>
+<summary><strong>Installed Key Packages</strong></summary>
 
-### Frontend
-- React 18
-- Vite 7
-- Tailwind CSS 3
-- Redux Toolkit
-- React Router 6
-- Axios
-- STOMP + SockJS
+- Frontend: react, react-router-dom, @reduxjs/toolkit, axios, @stomp/stompjs, sockjs-client, tailwindcss, lucide-react
+- Backend: spring-boot-starter-data-jpa, spring-boot-starter-security, spring-boot-starter-websocket, jjwt, mysql-connector-j, cloudinary
 
-### Backend
-- Java 17
-- Spring Boot 4
-- Spring Security + JWT
-- Spring Data JPA (Hibernate)
-- Spring WebSocket (STOMP)
-- MySQL
-- Cloudinary image storage
+</details>
 
 ## System Architecture
 ```mermaid
 flowchart LR
     U[Customer/Admin Browser] --> F[React Frontend]
     F -->|REST /api/*| B[Spring Boot API]
-    F -->|STOMP /ws| W[WebSocket Gateway]
-    B --> D[(MySQL)]
-    B --> C[Cloudinary]
-    W --> D
+    F -->|STOMP /ws| W[WebSocket Broker]
+    B --> DB[(MySQL)]
+    B --> M[(Cloudinary or Local Uploads)]
+    W --> DB
 ```
 
-## Data Flow Diagrams (DFD)
+## Drop Engine
+The drop system is built to make launch events explicit and trackable.
+
+```mermaid
+stateDiagram-v2
+    [*] --> UPCOMING
+    UPCOMING --> LIVE: dropTime reached and stock > 0
+    LIVE --> SOLD_OUT: stock == 0
+    LIVE --> [*]: product retired/delisted
+```
+
+```mermaid
+sequenceDiagram
+    participant User as Shopper
+    participant UI as React UI
+    participant API as Spring API
+    participant DB as MySQL
+    participant WS as WebSocket
+
+    User->>UI: Open product page
+    UI->>WS: /app/view/{productId} action=enter
+    WS-->>UI: /topic/viewers/{productId}
+
+    User->>UI: Join queue
+    UI->>API: POST /api/queue/{productId}/join
+    API->>DB: Create queue entry
+    API-->>UI: Queue response
+    WS-->>UI: /topic/queue/{productId}
+
+    User->>UI: Add to cart / Place order
+    UI->>API: POST /api/cart and POST /api/orders
+    API->>DB: Persist order and order items
+    API-->>UI: Updated order state
+```
+
+## DFD (Level 0 and Level 1)
 
 ### DFD Level 0
 ```mermaid
 flowchart TD
-    User[End User] -->|Auth, Browse, Cart, Checkout| RocketDrop[(RocketDrop System)]
-    Admin[Admin User] -->|Catalog and Order Operations| RocketDrop
-    RocketDrop -->|Product, Cart, Orders, Users| DB[(MySQL)]
-    RocketDrop -->|Image Upload/Retrieval| Media[(Cloudinary/Local Uploads)]
-    RocketDrop -->|Queue and Viewer Streams| Realtime[WebSocket Topics]
+    Customer[Customer] -->|Browse, Cart, Checkout| System[(RocketDrop)]
+    Admin[Admin] -->|Catalog, Scheduling, Fulfillment| System
+    System -->|Users, Products, Orders| DB[(MySQL)]
+    System -->|Image upload/read| Media[(Cloudinary/Uploads)]
+    System -->|Queue and Viewer Streams| RT[(WebSocket Topics)]
 ```
 
 ### DFD Level 1
 ```mermaid
 flowchart TD
-    U[User] --> P1[1.0 Authentication Service]
-    U --> P2[2.0 Product Discovery Service]
-    U --> P3[3.0 Cart and Order Service]
-    U --> P4[4.0 Queue and Realtime Service]
-    A[Admin] --> P5[5.0 Admin Catalog Service]
+    U[User] --> A1[1.0 Auth and Identity]
+    U --> A2[2.0 Product Discovery]
+    U --> A3[3.0 Cart and Order Processing]
+    U --> A4[4.0 Realtime Queue and Viewers]
+    AD[Admin] --> A5[5.0 Catalog and Ops]
 
-    P1 <--> D1[(Users)]
-    P2 <--> D2[(Products/Categories/Images)]
-    P3 <--> D3[(Cart/Orders/Addresses)]
-    P4 <--> D4[(Queue/Viewer State)]
-    P5 <--> D2
-
-    P5 --> M[Media Storage]
-    P4 --> T[STOMP Topics]
+    A1 <--> D1[(Users)]
+    A2 <--> D2[(Products, Categories, Images)]
+    A3 <--> D3[(Cart, Orders, Addresses)]
+    A4 <--> D4[(Queue State)]
+    A5 <--> D2
+    A5 --> Media[(Cloudinary/Uploads)]
 ```
 
-## Repository Structure
+## Page Experience Map
+
+| Route | Persona | Purpose | Highlights |
+|---|---|---|---|
+| / | Visitor | Brand + launch entry | Hero, spotlight content |
+| /products | Visitor/Customer | Product discovery | Search, filters, infinite loading |
+| /products/:id | Visitor/Customer | Product deep dive | Gallery, countdown, queue interactions |
+| /drops | Visitor/Customer | Drop-centric browsing | LIVE/UPCOMING experience |
+| /cart | Customer | Purchase staging | Quantity, totals, item control |
+| /checkout | Customer | Order placement | Address-driven checkout |
+| /orders | Customer | Fulfillment visibility | Status timeline |
+| /profile | Customer | Account management | Profile and password updates |
+| /wishlist | Customer | Saved intent list | Quick re-entry to products |
+| /admin | Admin | Operations control center | Analytics cards, quick overview |
+| /admin?tab=products | Admin | Product operations | Add/edit/delete, image audit, drop schedule |
+| /admin?tab=orders | Admin | Fulfillment operations | Status management |
+| /admin?tab=categories | Admin | Taxonomy management | Category add/delete |
+
+## Project Structure
 ```text
 RocketDrop/
   backend/
     src/main/java/com/rocketdrop/backend/
-      controller/
-      service/
-      repository/
-      model/
-      dto/
       config/
+      controller/
+      dto/
+      model/
+      repository/
+      security/
+      service/
     src/main/resources/application.properties
     pom.xml
   frontend/
     src/
-      pages/
       components/
-      services/
-      hooks/
       context/
+      hooks/
+      layouts/
+      pages/
+      services/
+      store/
       utils/
     package.json
+  API_DOCUMENTATION.md
   QUICKSTART.md
   PROJECT_OVERVIEW.md
   README.md
@@ -144,47 +185,65 @@ RocketDrop/
 - Java 17+
 - Node.js 18+
 - MySQL 8+
-- Maven (or use ./mvnw)
 
-### 1) Run backend
+### Run backend
 ```bash
 cd backend
 ./mvnw spring-boot:run
 ```
-Backend base URL: http://localhost:8080
+Backend: http://localhost:8080
 
-### 2) Run frontend
+### Run frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Frontend URL: http://localhost:5173
+Frontend: http://localhost:5173
 
-## Configuration
-Primary backend configuration is in backend/src/main/resources/application.properties.
+<details>
+<summary><strong>Build commands</strong></summary>
 
-Recommended production approach:
-- Move secrets to environment variables
-- Use managed MySQL (RDS/PlanetScale/Aiven/etc.)
-- Keep Cloudinary credentials outside source control
+```bash
+# backend
+cd backend
+./mvnw clean package -DskipTests
 
-## Security Model
-- Stateless JWT authentication
-- Role-based access: CUSTOMER, ADMIN
-- Endpoint-level authorization with @PreAuthorize
-- Protected admin namespace: /api/admin/**
+# frontend
+cd frontend
+npm run build
+npm run preview
+```
 
-## Deployment Guidance
-Recommended split:
-- Frontend: Vercel/Netlify/S3+CloudFront
-- Backend: Render/Fly/AWS ECS/EC2
-- Database: Managed MySQL
-- Realtime scaling: Redis pub/sub backplane when using multiple backend instances
+</details>
 
-## Documentation Index
+## Configuration and Security
+
+Primary app config file:
+- backend/src/main/resources/application.properties
+
+Security model:
+- JWT stateless authentication
+- Role-based access (CUSTOMER, ADMIN)
+- Admin namespace: /api/admin/**
+- Public browsing for product/category GET endpoints
+
+Production safety checklist:
+- Move all secrets to environment variables
+- Rotate exposed credentials before deployment
+- Enable managed backups and monitoring
+
+## Deployment Blueprint
+
+Recommended setup:
+- Frontend: Vercel or Netlify
+- Backend: ECS/Render/Fly/EC2
+- Database: Managed MySQL (RDS, PlanetScale, Aiven, etc.)
+- Realtime scale-out: Redis pub/sub backplane when running multiple API instances
+
+## Documentation Hub
 - API reference: API_DOCUMENTATION.md
 - Quick setup: QUICKSTART.md
-- Project deep dive: PROJECT_OVERVIEW.md
-- Backend setup notes: backend/SETUP_GUIDE.md
-- Frontend setup notes: frontend/README_SETUP.md
+- Deep project notes: PROJECT_OVERVIEW.md
+- Backend setup: backend/SETUP_GUIDE.md
+- Frontend setup: frontend/README_SETUP.md
