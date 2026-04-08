@@ -1,8 +1,10 @@
 package com.rocketdrop.backend.controller;
 
 import com.rocketdrop.backend.model.Category;
+import com.rocketdrop.backend.model.Coupon;
 import com.rocketdrop.backend.model.Product;
 import com.rocketdrop.backend.service.AdminService;
+import com.rocketdrop.backend.service.CouponService;
 import com.rocketdrop.backend.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -30,6 +32,7 @@ public class AdminController {
 
     private final AdminService adminService;
     private final FileStorageService fileStorageService;
+    private final CouponService couponService;
 
     @PostMapping(value = "/uploads/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, String>> uploadImage(@RequestParam("file") MultipartFile file) {
@@ -134,6 +137,43 @@ public class AdminController {
     public ResponseEntity<List<Category>> getAllCategories() {
         List<Category> categories = adminService.getAllCategories();
         return ResponseEntity.ok(categories);
+    }
+
+    // Coupons
+    @GetMapping("/coupons")
+    public ResponseEntity<List<Coupon>> getAllCoupons() {
+        return ResponseEntity.ok(couponService.getAllCoupons());
+    }
+
+    @PostMapping("/coupons")
+    public ResponseEntity<Coupon> createCoupon(@RequestBody Map<String, Object> request) {
+        String code = request.get("code") == null ? null : request.get("code").toString();
+        Integer discountPercentage = toNullableInteger(request.get("discountPercentage"));
+        Boolean active = request.get("active") == null ? null : Boolean.valueOf(request.get("active").toString());
+        LocalDateTime validFrom = request.get("validFrom") == null ? null : parseDateTime(request.get("validFrom").toString());
+        LocalDateTime validTo = request.get("validTo") == null ? null : parseDateTime(request.get("validTo").toString());
+
+        return ResponseEntity.ok(couponService.createCoupon(code, discountPercentage, active, validFrom, validTo));
+    }
+
+    @PutMapping("/coupons/{couponId}")
+    public ResponseEntity<Coupon> updateCoupon(@PathVariable Long couponId, @RequestBody Map<String, Object> request) {
+        Integer discountPercentage = toNullableInteger(request.get("discountPercentage"));
+        Boolean active = request.get("active") == null ? null : Boolean.valueOf(request.get("active").toString());
+        LocalDateTime validFrom = request.containsKey("validFrom")
+                ? (request.get("validFrom") == null ? null : parseDateTime(request.get("validFrom").toString()))
+                : null;
+        LocalDateTime validTo = request.containsKey("validTo")
+                ? (request.get("validTo") == null ? null : parseDateTime(request.get("validTo").toString()))
+                : null;
+
+        return ResponseEntity.ok(couponService.updateCoupon(couponId, discountPercentage, active, validFrom, validTo));
+    }
+
+    @DeleteMapping("/coupons/{couponId}")
+    public ResponseEntity<Void> deleteCoupon(@PathVariable Long couponId) {
+        couponService.deleteCoupon(couponId);
+        return ResponseEntity.noContent().build();
     }
 
     private static LocalDateTime parseDateTime(String value) {

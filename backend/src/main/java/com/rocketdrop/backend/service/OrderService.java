@@ -6,7 +6,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -19,6 +21,8 @@ public class OrderService {
     private final UserRepository userRepository;
     private final WebSocketService webSocketService;
     private final QueueService queueService;
+        private final EmailNotificationService emailNotificationService;
+        private final CouponService couponService;
 
     public OrderService(OrderRepository orderRepository,
                         OrderItemRepository orderItemRepository,
@@ -26,7 +30,9 @@ public class OrderService {
                         ProductRepository productRepository,
                         UserRepository userRepository,
                         WebSocketService webSocketService,
-                        QueueService queueService) {
+                        QueueService queueService,
+                        EmailNotificationService emailNotificationService,
+                        CouponService couponService) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.cartItemRepository = cartItemRepository;
@@ -34,10 +40,12 @@ public class OrderService {
         this.userRepository = userRepository;
         this.webSocketService = webSocketService;
         this.queueService = queueService;
+        this.emailNotificationService = emailNotificationService;
+        this.couponService = couponService;
     }
 
     @Transactional
-    public Order placeOrder(Long userId, Long addressId) {
+    public Order placeOrder(Long userId, Long addressId, String couponCode) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -58,6 +66,7 @@ public class OrderService {
         order.setCreatedAt(LocalDateTime.now());
 
         BigDecimal totalPrice = BigDecimal.ZERO;
+        List<OrderItem> createdOrderItems = new ArrayList<>();
         for (CartItem cartItem : cartItems) {
             Product product = cartItem.getProduct();
             if (product.getStock() < cartItem.getQuantity()) {
@@ -70,6 +79,7 @@ public class OrderService {
             orderItem.setQuantity(cartItem.getQuantity());
             orderItem.setPrice(product.getPrice());
             orderItemRepository.save(orderItem);
+            createdOrderItems.add(orderItem);
 
             totalPrice = totalPrice.add(product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity())));
 
@@ -79,6 +89,19 @@ public class OrderService {
 
             // Broadcast stock update
             webSocketService.broadcastStockUpdate(product.getId(), product.getStock());
+        }
+
+        Coupon appliedCoupon = null;
+        int discountPercentage = 0;
+        if (couponCode != null && !couponCode.isBlank()) {
+            appliedCoupon = couponService.getUsableCouponOrThrow(couponCode);
+            discountPercentage = appliedCoupon.getDiscountPercentage() == null ? 0 : appliedCoupon.getDiscountPercentage();
+        }
+
+        if (discountPercentage > 0) {
+            BigDecimal discountFactor = BigDecimal.valueOf(100 - discountPercentage)
+                .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+            totalPrice = totalPrice.multiply(discountFactor).setScale(2, RoundingMode.HALF_UP);
         }
 
         order.setTotalPrice(totalPrice);
@@ -96,7 +119,18 @@ public class OrderService {
         // Clear cart
         cartItemRepository.deleteByUserId(userId);
 
+        if (appliedCoupon != null) {
+            couponService.markCouponUsed(appliedCoupon.getId());
+        }
+
+        emailNotificationService.sendOrderConfirmation(savedOrder, createdOrderItems);
+
         return savedOrder;
+    }
+
+    @Transactional
+    public Order placeOrder(Long userId, Long addressId) {
+        return placeOrder(userId, addressId, null);
     }
 
     public List<Order> getUserOrders(Long userId) {
@@ -117,6 +151,7 @@ public class OrderService {
 
         // Broadcast order status update
         webSocketService.broadcastOrderUpdate(orderId, status);
+        emailNotificationService.sendOrderStatusUpdate(savedOrder);
 
         return savedOrder;
     }

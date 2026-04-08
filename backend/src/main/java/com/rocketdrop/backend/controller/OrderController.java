@@ -32,10 +32,15 @@ public class OrderController {
 
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ResponseEntity<Order> placeOrder(@RequestBody Map<String, Long> request) {
+    public ResponseEntity<Order> placeOrder(@RequestBody Map<String, Object> request) {
         Long userId = getCurrentUserId();
-        Long addressId = request.get("addressId");
-        Order order = orderService.placeOrder(userId, addressId);
+        Object addressIdValue = request.get("addressId");
+        if (addressIdValue == null) {
+            throw new RuntimeException("addressId is required");
+        }
+        Long addressId = Long.valueOf(addressIdValue.toString());
+        String couponCode = request.get("couponCode") == null ? null : request.get("couponCode").toString();
+        Order order = orderService.placeOrder(userId, addressId, couponCode);
         return ResponseEntity.ok(order);
     }
 
