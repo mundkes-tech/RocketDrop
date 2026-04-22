@@ -36,7 +36,7 @@ const RegisterPage = () => {
   const getPasswordStrength = (password) => {
     if (!password) return null;
     if (password.length < 8) return { text: 'Too short', color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30', strength: 1 };
-    if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) return { text: 'Fair', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', strength: 2 };
+    if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) return { text: 'Fair', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', strength: 2 };
     return { text: 'Strong', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', strength: 3 };
   };
 
@@ -57,7 +57,9 @@ const RegisterPage = () => {
     }
 
     if (!values.password) errors.password = 'Password is required';
-    else if (values.password.length < 8) errors.password = 'Password must be at least 8 characters';
+    else if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(values.password)) {
+      errors.password = 'Password must include uppercase, lowercase and number';
+    }
 
     if (!values.confirmPassword) errors.confirmPassword = 'Please confirm password';
     else if (values.password !== values.confirmPassword) errors.confirmPassword = 'Passwords do not match';
@@ -74,11 +76,13 @@ const RegisterPage = () => {
     setLoading(true);
     setError('');
     try {
+      const payload = { ...values };
+      delete payload.confirmPassword;
       await actions.register({
-        ...values,
-        name: values.name.trim(),
-        email: values.email.trim().toLowerCase(),
-        phone: values.phone.trim(),
+        ...payload,
+        name: payload.name.trim(),
+        email: payload.email.trim().toLowerCase(),
+        phone: payload.phone.trim(),
       });
       navigate('/login', { state: { message: 'Account created. Please sign in.' } });
     } catch (err) {
@@ -127,6 +131,7 @@ const RegisterPage = () => {
                     type="text"
                     value={values.name}
                     onChange={(event) => setValues((prev) => ({ ...prev, name: event.target.value }))}
+                    autoComplete="name"
                     className={`rd-input pl-10 ${fieldErrors.name ? 'border-red-500 focus:ring-1 focus:ring-red-500/30' : ''}`}
                     placeholder="John Doe"
                   />
@@ -143,6 +148,7 @@ const RegisterPage = () => {
                     type="email"
                     value={values.email}
                     onChange={(event) => setValues((prev) => ({ ...prev, email: event.target.value }))}
+                    autoComplete="email"
                     className={`rd-input pl-10 ${fieldErrors.email ? 'border-red-500 focus:ring-1 focus:ring-red-500/30' : ''}`}
                     placeholder="you@example.com"
                   />
@@ -159,6 +165,7 @@ const RegisterPage = () => {
                     type="tel"
                     value={values.phone}
                     onChange={(event) => setValues((prev) => ({ ...prev, phone: event.target.value }))}
+                    autoComplete="tel"
                     className={`rd-input pl-10 ${fieldErrors.phone ? 'border-red-500 focus:ring-1 focus:ring-red-500/30' : ''}`}
                     placeholder="+91 98765 43210"
                   />
@@ -182,6 +189,7 @@ const RegisterPage = () => {
                     type="password"
                     value={values.password}
                     onChange={(event) => setValues((prev) => ({ ...prev, password: event.target.value }))}
+                    autoComplete="new-password"
                     className={`rd-input pl-10 ${fieldErrors.password ? 'border-red-500 focus:ring-1 focus:ring-red-500/30' : ''}`}
                     placeholder="Min. 8 characters, with numbers"
                   />
@@ -212,6 +220,7 @@ const RegisterPage = () => {
                     type="password"
                     value={values.confirmPassword}
                     onChange={(event) => setValues((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+                    autoComplete="new-password"
                     className={`w-full bg-white border rounded-xl pl-10 pr-4 py-3 focus:outline-none transition-all text-slate-900 placeholder-slate-400 ${
                       fieldErrors.confirmPassword
                         ? 'border-red-500 focus:ring-1 focus:ring-red-500/30'
